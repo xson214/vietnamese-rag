@@ -11,7 +11,7 @@ from starlette.concurrency import run_in_threadpool
 from .config import Settings
 from .errors import ApiError
 from .generation import Generator
-from .ingestion import DOCX, PDF
+from .ingestion import DOCX, PDF, JPEG, PNG, WEBP
 from .model_settings import fetch_models, resolve_generation_settings
 from .schemas import (ChatRequest, ChatResponse, DeleteResponse, DocumentListResponse,
                       DocumentResponse, ErrorResponse, HealthResponse, SearchRequest,
@@ -99,9 +99,9 @@ def create_app(settings=None):
                 raise ApiError(422, 'INVALID_DOCUMENT', 'File không có nội dung.')
             filename = re.sub(r'[\x00-\x1f\x7f]', '', (file.filename or 'document').replace('\\', '/').split('/')[-1])[:200] or 'document'
             suffix = filename.rsplit('.', 1)[-1].lower()
-            mime = {'pdf': PDF, 'docx': DOCX}.get(suffix)
+            mime = {'pdf': PDF, 'docx': DOCX, 'jpg':JPEG, 'jpeg':JPEG, 'png':PNG, 'webp':WEBP}.get(suffix)
             if mime is None or file.content_type not in {mime, 'application/octet-stream'}:
-                raise ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Chỉ hỗ trợ file PDF hoặc DOCX đúng MIME.')
+                raise ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Chỉ hỗ trợ PDF, DOCX, JPG, PNG hoặc WebP đúng MIME.')
             document, created = await run_in_threadpool(store.upload, content, filename, mime, key)
         finally:
             await form.close()
@@ -133,6 +133,16 @@ def create_app(settings=None):
         response.headers['Retry-After'] = '2'
         return body(request, document=document)
 
+    @app.post('/api/v1/documents/{id}/reprocess', response_model=DocumentResponse, status_code=202, responses={**ERRORS, '200': {'model': DocumentResponse}}, tags=['documents'])
+    async def reprocess(id: str, request: Request, response: Response, idempotency_key: Annotated[str, Header()]):
+        if await request.body():
+            raise ApiError(422, 'VALIDATION_ERROR', 'Đọc lại tài liệu không nhận body.')
+        document, created = await run_in_threadpool(store.reprocess, id, idempotency(idempotency_key))
+        response.status_code = 202 if created else 200
+        response.headers['Retry-After'] = '2'
+        response.headers['Location'] = f"/api/v1/documents/{id}"
+        return body(request, document=document)
+
     @app.delete('/api/v1/documents/{id}', response_model=DeleteResponse, status_code=202, responses={**ERRORS, '204': {'description': 'Đã xóa nội dung khỏi mọi store.'}}, tags=['documents'])
     def delete(id: str, request: Request):
         result = store.delete(id)
@@ -148,6 +158,7 @@ def create_app(settings=None):
         version, directory = store.pin(payload.index_version, payload.document_ids)
         try:
             hits, trace = store.engine.search(directory, query, payload.retrieval_config.model_dump(), payload.document_ids)
+            hits = store.attach_extraction(hits)
         except Exception:
             store.recheck(version)
             raise

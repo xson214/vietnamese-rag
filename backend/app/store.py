@@ -20,7 +20,7 @@ from dataclasses import replace
 
 from .chunking import chunk_pages
 from .errors import ApiError
-from .ingestion import PDF, extract, validate_file
+from .ingestion import FILE_EXTENSIONS, extract, validate_file
 from .retrieval import Engine
 
 log = logging.getLogger(__name__)
@@ -77,6 +77,23 @@ class Store:
         # ident always comes from the registry before use.
         return self.root / 'documents' / ident
 
+    def versiondir(self, ident, version):
+        # Version 1 keeps the original layout for databases created before reprocessing.
+        root = self.docdir(ident)
+        return root if version == 1 else root / 'versions' / str(version)
+
+    @staticmethod
+    def _version_metadata(document, version):
+        if version == document['document_version']:
+            return document
+        return document.get('version_history', {}).get(str(version))
+
+    def _ingestion_config(self):
+        return {key: getattr(self.settings, key) for key in (
+            'embedding_backend', 'embedding_model', 'embedding_revision', 'reranker_backend',
+            'reranker_model', 'reranker_revision', 'qdrant_url', 'chunking_strategy', 'chunk_size', 'chunk_overlap',
+            'ocr_languages', 'ocr_min_confidence', 'max_image_pixels', 'ocr_max_pages')}
+
     def _load(self, db, ident):
         row = db.execute('SELECT data FROM documents WHERE id=?', (ident,)).fetchone()
         if row:
@@ -95,7 +112,8 @@ class Store:
     def public(self, db, document):
         result = {key: document[key] for key in ('document_id', 'document_version', 'filename', 'mime_type', 'size_bytes', 'status', 'page_count', 'job_id', 'error', 'created_at', 'updated_at')}
         result['available_index_versions'] = self._versions(db, document['document_id'])
-        result['source_url'] = f"/api/v1/documents/{document['document_id']}/source?document_version=1" if document['page_count'] and document['status'] not in {'deleting', 'delete_failed'} else None
+        result['source_url'] = f"/api/v1/documents/{document['document_id']}/source?document_version={document['document_version']}" if document['page_count'] and document['status'] not in {'deleting', 'delete_failed'} else None
+        result['extraction'] = document.get('extraction')
         return result
 
     def get(self, ident):
@@ -107,6 +125,7 @@ class Store:
             document = self._load(db, ident)
             result = {key: document[key] for key in ('document_id', 'document_version', 'status', 'stage', 'progress', 'job_id', 'attempt', 'error', 'updated_at')}
             result['available_index_versions'] = self._versions(db, ident)
+            result['extraction'] = document.get('extraction')
             return result
 
     def listing(self, limit, cursor, status):
@@ -160,21 +179,69 @@ class Store:
             ident, job = uid('doc'), uid('job')
             directory = self.docdir(ident)
             directory.mkdir()
-            original = directory / ('original.pdf' if mime == PDF else 'original.docx')
+            original = directory / ('original' + FILE_EXTENSIONS[mime])
             try:
                 original.write_bytes(content)
-                validate_file(original, mime)
+                validate_file(original, mime, self.settings)
             except Exception:
                 shutil.rmtree(directory)
                 raise
             doc = dict(document_id=ident, document_version=1, filename=filename, mime_type=mime,
                        size_bytes=len(content), status='queued', stage='queued', progress=0.0,
                        page_count=None, job_id=job, attempt=1, error=None, created_at=now(), updated_at=now())
-            doc['ingestion_config'] = {key: getattr(self.settings, key) for key in (
-                'embedding_backend', 'embedding_model', 'embedding_revision', 'reranker_backend',
-                'reranker_model', 'reranker_revision', 'qdrant_url', 'chunking_strategy', 'chunk_size', 'chunk_overlap')}
+            doc['ingestion_config'] = self._ingestion_config()
             db.execute('INSERT INTO documents VALUES(?,?,?)', (ident, digest, json.dumps(doc, ensure_ascii=False)))
             db.execute('INSERT INTO jobs VALUES(?,?,?,?)', (job, ident, 'ingest', 'queued'))
+            db.execute('INSERT INTO idempotency VALUES(?,?,?,?)', (key, fingerprint, ident, time.time()))
+            result = self.public(db, doc)
+        self.wake.set()
+        return result, True
+
+    def reprocess(self, ident, key):
+        """Queue a new immutable extraction version while retaining published sources."""
+        fingerprint = 'reprocess:' + ident
+        with self.db() as db:
+            replay = self._key(db, key, fingerprint)
+            if replay:
+                return self.public(db, replay), False
+            doc = self._load(db, ident)
+            if doc['status'] in {'deleting', 'delete_failed'}:
+                raise ApiError(410, 'DOCUMENT_DELETING', 'Tài liệu đang bị xóa.')
+            if doc['status'] != 'ready':
+                raise ApiError(409, 'INVALID_DOCUMENT_STATE', 'Chỉ đọc lại tài liệu ready; tài liệu failed dùng retry.')
+            previous = doc['document_version']
+            version = previous + 1
+            directory = self.versiondir(ident, version)
+            if directory.exists():
+                # A crash before the SQLite commit can leave an unpublished
+                # next-version copy. Recover it without touching any source
+                # referenced by the registry or an immutable generation.
+                referenced = str(version) in doc.get('version_history', {}) or any(
+                    json.loads(row['members']).get(ident) == version
+                    for row in db.execute('SELECT members FROM generations')
+                )
+                if referenced or not directory.resolve().is_relative_to(self.docdir(ident).resolve()):
+                    raise ApiError(409, 'DOCUMENT_VERSION_CONFLICT', 'Phiên bản đọc lại đã được sử dụng; không ghi đè nguồn.')
+                shutil.rmtree(directory)
+            directory.mkdir(parents=True)
+            try:
+                suffix = 'original' + FILE_EXTENSIONS[doc['mime_type']]
+                shutil.copyfile(self.versiondir(ident, previous) / suffix, directory / suffix)
+            except Exception:
+                shutil.rmtree(directory)
+                raise
+            doc.setdefault('version_history', {})[str(previous)] = {
+                'document_version': previous,
+                'page_count': doc['page_count'],
+                'extraction': doc.get('extraction'),
+                'ingestion_config': doc.get('ingestion_config', {}),
+            }
+            doc.update(document_version=version, status='queued', stage='queued', progress=0.0,
+                       error=None, page_count=None, extraction=None, attempt=1, job_id=uid('job'),
+                       ingestion_config=self._ingestion_config())
+            self._save(db, doc)
+            db.execute("UPDATE state SET value=CAST(value AS INTEGER)+1 WHERE key='epoch'")
+            db.execute('INSERT INTO jobs VALUES(?,?,?,?)', (doc['job_id'], ident, 'ingest', 'queued'))
             db.execute('INSERT INTO idempotency VALUES(?,?,?,?)', (key, fingerprint, ident, time.time()))
             result = self.public(db, doc)
         self.wake.set()
@@ -217,6 +284,14 @@ class Store:
         self.wake.set()
         return result
 
+    def attach_extraction(self, hits):
+        with self.db() as db:
+            for hit in hits:
+                row = db.execute('SELECT data FROM documents WHERE id=?', (hit['document_id'],)).fetchone()
+                metadata = self._version_metadata(json.loads(row['data']), hit['document_version']) if row else None
+                hit['extraction'] = metadata.get('extraction') if metadata else None
+        return hits
+
     def pin(self, version, ids):
         with self.db() as db:
             # Validate explicit scope first; never silently drop an invalid document.
@@ -252,9 +327,9 @@ class Store:
             doc = self._load(db, ident)
             if doc['status'] in {'deleting', 'delete_failed'}:
                 raise ApiError(410, 'DOCUMENT_DELETING', 'Nguồn đã bị thu hồi.')
-            if version != doc['document_version']:
+            if not self._version_metadata(doc, version):
                 raise ApiError(404, 'DOCUMENT_VERSION_NOT_FOUND', 'Không tìm thấy phiên bản tài liệu.')
-            path = self.docdir(ident) / 'source.pdf'
+            path = self.versiondir(ident, version) / 'source.pdf'
             if not path.exists():
                 raise ApiError(409, 'SOURCE_NOT_READY', 'Bản PDF chuẩn chưa sẵn sàng.', True)
             return path.read_bytes()
@@ -323,7 +398,7 @@ class Store:
             try:
                 chunks = []
                 for doc in docs:
-                    pages = json.loads((self.docdir(doc['document_id']) / 'pages.json').read_text(encoding='utf-8'))
+                    pages = json.loads((self.versiondir(doc['document_id'], doc['document_version']) / 'pages.json').read_text(encoding='utf-8'))
                     chunks.extend(chunk_pages(doc, pages, strategy=build_settings.chunking_strategy, size=build_settings.chunk_size, overlap=build_settings.chunk_overlap))
                 engine.build(version, chunks, path)
                 with self.db() as db:
@@ -361,9 +436,13 @@ class Store:
         self._progress(ident, status='processing', stage='extracting', progress=None)
         with self.db() as db:
             doc = self._load(db, ident)
-        pages = extract(self.docdir(ident), doc['mime_type'], self.settings)
-        self._progress(ident, page_count=len(pages), stage='indexing')
-        (self.docdir(ident) / 'pages.json').write_text(json.dumps(pages, ensure_ascii=False), encoding='utf-8')
+        extraction_settings = replace(self.settings, **doc.get('ingestion_config', {}))
+        directory = self.versiondir(ident, doc['document_version'])
+        pages = extract(directory, doc['mime_type'], extraction_settings)
+        metadata = directory / 'extraction.json'
+        info = json.loads(metadata.read_text(encoding='utf-8')) if metadata.exists() else {'method':'text','ocr_pages':[],'warnings':[]}
+        self._progress(ident, page_count=len(pages), stage='indexing', extraction=info)
+        (directory / 'pages.json').write_text(json.dumps(pages, ensure_ascii=False), encoding='utf-8')
         self._publish(extra=ident)
 
     def _cleanup(self, ident):

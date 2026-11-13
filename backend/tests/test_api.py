@@ -253,4 +253,109 @@ def test_retry_preserves_ingestion_config(client, app, monkeypatch):
     response = client.post(f'/api/v1/documents/{ident}/retry', headers={'Idempotency-Key':'retry-pinned'})
     assert response.status_code == 202
     wait(client, ident)
-    assert attempts == [350,350]
+    assert attempts == [120,120]
+
+
+def test_reprocess_preserves_pinned_text_sources_and_extraction(client, app, monkeypatch):
+    import json
+    from app.store import extract
+
+    ident = upload(client).json()['document']['document_id']
+    old_index = wait(client, ident).json()['available_index_versions'][0]
+    old_source = client.get(f'/api/v1/documents/{ident}/source?document_version=1').content
+    old_pages = (app.state.store.docdir(ident) / 'pages.json').read_bytes()
+    changed_pdf = pdf('Improved extraction of document text.')
+
+    def improved(directory, mime, settings):
+        pages = extract(directory, mime, settings)
+        (directory / 'source.pdf').write_bytes(changed_pdf)
+        (directory / 'extraction.json').write_text(json.dumps({
+            'method': 'ocr', 'ocr_pages': [1], 'warnings': ['Reprocessed scan'],
+        }), encoding='utf-8')
+        return [page.replace('Quy trinh dang ky', 'Improved extraction') for page in pages]
+
+    monkeypatch.setattr('app.store.extract', improved)
+    path = f'/api/v1/documents/{ident}/reprocess'
+    response = client.post(path, headers={'Idempotency-Key': 'reprocess-once'})
+    assert response.status_code == 202, response.text
+    assert response.json()['document']['document_version'] == 2
+    assert client.post(path, headers={'Idempotency-Key': 'reprocess-once'}).status_code == 200
+    wait(client, ident)
+    current = client.get(f'/api/v1/documents/{ident}').json()['document']
+    assert current['source_url'].endswith('document_version=2')
+    assert client.get(current['source_url']).content == changed_pdf
+    assert client.get(f'/api/v1/documents/{ident}/source?document_version=1').content == old_source
+    assert (app.state.store.docdir(ident) / 'pages.json').read_bytes() == old_pages
+    assert client.get(f'/api/v1/documents/{ident}/source?document_version=3').status_code == 404
+    old = client.post('/api/v1/search', json={'query': 'dang ky ho so', 'index_version': old_index}).json()
+    new = client.post('/api/v1/search', json={'query': 'Improved extraction', 'document_ids': [ident]}).json()
+    assert old['hits'][0]['document_version'] == 1
+    assert old['hits'][0]['extraction']['method'] == 'text'
+    assert new['hits'][0]['document_version'] == 2
+    assert new['hits'][0]['extraction']['method'] == 'ocr'
+    assert 'Improved extraction' in new['hits'][0]['text']
+    assert client.delete(f'/api/v1/documents/{ident}').status_code == 202
+    wait(client, ident, 'deleted')
+    assert not app.state.store.docdir(ident).exists()
+    assert client.get(current['source_url']).status_code == 410
+    assert client.get(f'/api/v1/documents/{ident}/source?document_version=1').status_code == 410
+
+
+def test_reprocess_rejects_body_and_unready_state(client, app, monkeypatch):
+    from app.errors import ApiError
+
+    def fail(*args):
+        raise ApiError(503, 'OCR_UNAVAILABLE', 'OCR unavailable', True)
+
+    monkeypatch.setattr('app.store.extract', fail)
+    ident = upload(client).json()['document']['document_id']
+    wait(client, ident, 'failed')
+    path = f'/api/v1/documents/{ident}/reprocess'
+    assert client.post(path, headers={'Idempotency-Key': 'failed-version'}).status_code == 409
+    assert client.post(path, headers={'Idempotency-Key': 'unexpected-body'}, json={}).status_code == 422
+    assert client.post(path).status_code == 422
+    assert client.post('/api/v1/documents/unknown/reprocess', headers={'Idempotency-Key': 'unknown'}).status_code == 404
+
+
+def test_reprocess_failure_can_retry_new_version_without_changing_old(client, app, monkeypatch):
+    from app.errors import ApiError
+    from app.store import extract
+
+    ident = upload(client).json()['document']['document_id']
+    old_index = wait(client, ident).json()['available_index_versions'][0]
+    old_pages = (app.state.store.docdir(ident) / 'pages.json').read_bytes()
+
+    def fail(*args):
+        raise ApiError(503, 'OCR_UNAVAILABLE', 'OCR unavailable', True)
+
+    monkeypatch.setattr('app.store.extract', fail)
+    path = f'/api/v1/documents/{ident}/reprocess'
+    assert client.post(path, headers={'Idempotency-Key': 'new-version'}).status_code == 202
+    assert wait(client, ident, 'failed').json()['document_version'] == 2
+    assert client.get(f'/api/v1/documents/{ident}/source?document_version=1').status_code == 200
+    assert client.post('/api/v1/search', json={'query': 'ho so', 'index_version': old_index}).status_code == 200
+    monkeypatch.setattr('app.store.extract', extract)
+    assert client.post(f'/api/v1/documents/{ident}/retry', headers={'Idempotency-Key': 'retry-version'}).status_code == 202
+    assert wait(client, ident).json()['document_version'] == 2
+    assert (app.state.store.docdir(ident) / 'pages.json').read_bytes() == old_pages
+
+
+def test_reprocess_recovers_uncommitted_copy_after_database_failure(client, app, monkeypatch):
+    ident = upload(client).json()['document']['document_id']
+    wait(client, ident)
+    store = app.state.store
+    save = store._save
+
+    def failed_save(*args):
+        raise OSError('simulated failure before transaction commit')
+
+    monkeypatch.setattr(store, '_save', failed_save)
+    with pytest.raises(OSError):
+        store.reprocess(ident, 'interrupted-copy')
+    assert store.get(ident)['document_version'] == 1
+    assert store.versiondir(ident, 2).exists()
+    monkeypatch.setattr(store, '_save', save)
+    result = client.post(f'/api/v1/documents/{ident}/reprocess', headers={'Idempotency-Key': 'recovered-copy'})
+    assert result.status_code == 202, result.text
+    assert wait(client, ident).json()['document_version'] == 2
+    assert client.get(f'/api/v1/documents/{ident}/source?document_version=1').status_code == 200

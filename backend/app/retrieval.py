@@ -71,8 +71,9 @@ class Engine:
                 try:
                     from sentence_transformers import CrossEncoder, SentenceTransformer
                     cls = SentenceTransformer if kind == "embedding" else CrossEncoder
+                    options = {"cache_folder": str(Path(getattr(self.settings, "data_dir", "data/runtime")) / "models")} if kind == "embedding" else {}
                     self._models[key] = cls(spec["model"], revision=spec.get("revision") or None,
-                                            trust_remote_code=False)
+                                            trust_remote_code=False, **options)
                 except Exception as exc:
                     raise ApiError(503, "DEPENDENCY_UNAVAILABLE",
                                    "Không tải được model retrieval đã cấu hình.", True) from exc

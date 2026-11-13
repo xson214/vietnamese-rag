@@ -1,0 +1,10 @@
+{
+  "description": "Local multilingual E5 embeddings with BM25; immutable pinned model revision",
+  "embedding_backend": "sentence_transformers",
+  "embedding_model": "intfloat/multilingual-e5-small",
+  "embedding_revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+  "chunking_strategy": "recursive",
+  "chunk_size": 120,
+  "chunk_overlap": 20,
+  "reranker_backend": "lexical"
+}

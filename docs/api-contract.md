@@ -12,7 +12,7 @@ Ngày cập nhật: 13/11/2026. Chủ trì A: tài liệu và health; B: search;
 - Tên file chỉ là tên hiển thị đã làm sạch, không chứa đường dẫn nội bộ. Không trả API key, filesystem path, stack trace hoặc prompt hệ thống.
 - API v1 không streaming, không lưu hội thoại nhiều lượt. `/chat` xử lý một câu hỏi mỗi request.
 - MVP dùng trong môi trường demo cục bộ. Xác thực, phân quyền tenant và endpoint quản trị index nằm ngoài hợp đồng này.
-- `Idempotency-Key` bắt buộc cho upload và retry; client tạo một key cho một hành động và dùng lại khi gửi lại do lỗi mạng. Server giữ mapping tối thiểu 24 giờ; cùng key nhưng khác fingerprint trả 409. DELETE đã có ngữ nghĩa lặp an toàn, không cần key.
+- `Idempotency-Key` bắt buộc cho upload, retry và reprocess; client tạo một key cho một hành động và dùng lại khi gửi lại do lỗi mạng. Server giữ mapping tối thiểu 24 giờ; cùng key nhưng khác fingerprint trả 409. DELETE đã có ngữ nghĩa lặp an toàn, không cần key.
 - `null` là chưa có/không áp dụng, không thay bằng `0`, chuỗi rỗng hay con số suy đoán.
 
 | Method | Route | Chủ trì | Thành công |
@@ -22,6 +22,7 @@ Ngày cập nhật: 13/11/2026. Chủ trì A: tài liệu và health; B: search;
 | GET | `/api/v1/documents/{id}` | A | 200 chi tiết |
 | DELETE | `/api/v1/documents/{id}` | A + B | 202 đang xóa; 204 khi đã dọn xong |
 | POST | `/api/v1/documents/{id}/retry` | A | 202 retry mới; 200 replay cùng key |
+| POST | `/api/v1/documents/{id}/reprocess` | A | 202 đọc lại thành document_version mới; 200 replay |
 | GET | `/api/v1/documents/{id}/status` | A | 200 tiến độ |
 | GET | `/api/v1/documents/{id}/source` | A | 200 PDF chuẩn theo document_version |
 | POST | `/api/v1/search` | B | 200 các đoạn truy xuất |
@@ -33,7 +34,11 @@ Route `/source` bổ sung để thực hiện chức năng mở trích dẫn đ�
 
 **Upload, danh sách và chi tiết tài liệu có hợp đồng cụ thể như sau.**
 
-`POST /documents` nhận multipart/form-data, đúng một trường `file`. Giới hạn MVP đề xuất: 20 MiB/file, tối đa 300 trang sau chuẩn hóa. MIME được chấp nhận là `application/pdf` và `application/vnd.openxmlformats-officedocument.wordprocessingml.document`; kiểm tra nội dung thực tế, không chỉ đuôi file. File rỗng, mã hóa hoặc hỏng bị từ chối; nếu lỗi chỉ phát hiện trong worker thì tài liệu chuyển `failed` với mã lỗi rõ ràng. PDF scan chưa có OCR cũng chuyển `failed` với `OCR_REQUIRED`.
+`POST /documents` nhận multipart/form-data, đúng một trường `file`. Giới hạn: 20 MiB/file, tối đa 300 trang, 24 triệu điểm ảnh và tối đa 20 trang cần OCR. MIME được chấp nhận: `application/pdf`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `image/jpeg`, `image/png`, `image/webp`; kiểm tra nội dung thực tế, không chỉ đuôi file. Ảnh phải tĩnh, không hỗ trợ HEIC. File rỗng, mã hóa hoặc hỏng bị từ chối; lỗi phát hiện trong worker chuyển tài liệu thành `failed`.
+
+Ảnh được xoay theo EXIF và chuyển thành PDF chuẩn một trang để xem nguồn; OCR cục bộ Tesseract `vie+eng` tạo text NFC/LF cho chunking. Trang PDF có ảnh và không có text cũng được OCR, giữ số trang vật lý. API Document, StatusResponse và SearchHit có trường extraction nullable: `{method: text|ocr|mixed, ocr_pages: [1], warnings: [...], engine, languages}`; tài liệu cũ chưa có metadata trả null. Thư mục chứa ảnh gốc, PDF nguồn, extraction.json và pages.json được dọn theo cùng lifecycle xóa tài liệu.
+
+OCR thiếu engine/model ngôn ngữ báo OCR_UNAVAILABLE/OCR_LANGUAGE_MISSING; ảnh không có chữ báo OCR_NO_TEXT, toàn bộ chữ không chắc báo OCR_UNREADABLE, timeout báo OCR_TIMEOUT. Không tự gửi ảnh sang LLM provider. Nếu người dùng chọn generation API, chỉ question và các đoạn OCR được đưa vào context như với văn bản tài liệu. Token nhận dạng thấp được thay bằng `[không rõ]`; đây không phải xác suất thuốc/liều đúng. Trace thêm ocr_used, ocr_source_ids, extraction_methods. Câu hỏi đọc thuốc/liều trên phần OCR không rõ sẽ trả insufficient_evidence kèm yêu cầu chụp lại hoặc đối chiếu với bác sĩ/dược sĩ, không đoán phần bị che.
 
 Upload mới trả 202 `DocumentResponse` ở trạng thái `queued`, kèm `Location: /api/v1/documents/{id}` và `Retry-After: 2`. 202 chỉ xác nhận đã lưu job bền vững, chưa đồng nghĩa index sẵn sàng. Một ID nội bộ `job_id` được trả để đối chiếu log, không có public jobs endpoint.
 
@@ -62,6 +67,12 @@ Cùng key và fingerprint trả 200 với tài liệu/trạng thái hiện tại
 `GET /documents/{id}/status` trả `request_id`, `document_id`, `document_version`, `status`, `stage`, `progress`, `job_id`, `attempt`, `available_index_versions`, `error`, `updated_at`. Progress là 0–1 hoặc null khi không thể ước lượng; không giả vờ tính chính xác phần trăm. Các stage: queued, validating, converting, extracting, chunking, embedding, indexing, publishing, completed, deleting, failed. UI poll 2 giây khi đang xử lý/xóa, tăng backoff khi lỗi dịch vụ và dừng khi trạng thái terminal.
 
 `POST /documents/{id}/retry` không có body, có Idempotency-Key. Chỉ tạo attempt mới khi status=`failed`; tái sử dụng document_version và cấu hình ingestion của lần thất bại. Cùng key đã nhận được replay trước khi kiểm tra lại status để không biến retry mạng thành 409. Key mới khi queued/processing/ready trả 409 `INVALID_DOCUMENT_STATE`; deleting/delete_failed/deleted trả 410. Retry không phải API đổi embedding/chunking; việc tạo generation thực nghiệm do công cụ nội bộ quản lý.
+
+`POST /documents/{id}/reprocess` không có body, có Idempotency-Key. Chỉ nhận tài liệu `ready`, giữ document_id và file gốc, tăng document_version rồi xếp job mới bằng cấu hình ingestion hiện tại. Response là DocumentResponse, kèm Location/Retry-After. Queued/processing/failed trả 409; deleting/delete_failed/deleted trả 410. Source PDF, text và extraction metadata của các phiên bản đã xuất bản giữ nguyên; citation/index cũ vẫn truy cập đúng phiên bản. Job thành công xuất bản generation mới; thất bại gọi retry cho phiên bản mới. DELETE thu hồi mọi phiên bản và dọn toàn bộ lịch sử. Giao diện giữ lựa chọn tài liệu nhưng chờ ready trước khi hỏi trên phiên bản mới.
+
+PDF scan có lớp chữ OCR vô hình bị hỏng được phát hiện thận trọng và OCR lại từ ảnh, kể cả khi `extract_text` không rỗng. Metadata bổ sung `pipeline_version`, `repaired_text_pages`; không sửa chữ/con số theo phỏng đoán. PDF số thông thường và lớp OCR sạch giữ nguyên. Nếu bản nhận dạng thay thế không đủ rõ, ingestion báo `OCR_UNREADABLE`. Tài liệu đã index trước bản sửa cần dùng reprocess, upload cùng bytes không tự ghi đè index cũ.
+
+Câu hỏi liều dùng cho trẻ chỉ có khoảng tuổi được giải thích bằng điều kiện áp dụng đọc rõ trong nguồn và yêu cầu dữ kiện còn thiếu. `answered` ở trường hợp này có citation và trace `evidence_scope=source_limits_only`; không có nghĩa đã xác định liều cho trẻ. Nếu không có điều kiện đọc rõ, trả insufficient_evidence với hướng dẫn bổ sung tuổi/cân nặng/dạng thuốc, không bịa liều hoặc chép phần mờ.
 
 `DELETE /documents/{id}` lập tức lưu tombstone thu hồi tài liệu, đặt deleting và vô hiệu hóa mọi generation chứa tài liệu đó. Response 202 gồm `request_id`, `document_id`, `status: deleting`, `job_id`, kèm Retry-After. Worker dọn file gốc/PDF chuẩn/text/chunk, Qdrant, BM25 và metadata nội dung. Ledger/tombstone tối thiểu được giữ riêng để bảo đảm xóa lặp an toàn.
 

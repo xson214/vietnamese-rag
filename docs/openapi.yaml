@@ -1019,6 +1019,180 @@ paths:
               description: Server-generated request ID
               schema:
                 type: string
+  /api/v1/documents/{id}/reprocess:
+    post:
+      tags:
+      - documents
+      summary: Reprocess
+      operationId: reprocess_api_v1_documents__id__reprocess_post
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: idempotency-key
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Idempotency-Key
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Request
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '410':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gone
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Request Entity Too Large
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unsupported Media Type
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Too Many Requests
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Internal Server Error
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Gateway
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '504':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gateway Timeout
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+          description: OK
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
   /api/v1/documents/{id}/source:
     get:
       tags:
@@ -1882,6 +2056,10 @@ components:
         updated_at:
           type: string
           title: Updated At
+        extraction:
+          anyOf:
+          - $ref: '#/components/schemas/ExtractionInfo'
+          - type: 'null'
       type: object
       required:
       - document_id
@@ -1984,6 +2162,43 @@ components:
       - request_id
       - error
       title: ErrorResponse
+    ExtractionInfo:
+      properties:
+        method:
+          type: string
+          enum:
+          - text
+          - ocr
+          - mixed
+          title: Method
+        ocr_pages:
+          items:
+            type: integer
+          type: array
+          title: Ocr Pages
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+        engine:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Engine
+        languages:
+          anyOf:
+          - type: string
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Languages
+      additionalProperties: true
+      type: object
+      required:
+      - method
+      title: ExtractionInfo
     GenerationConfig:
       properties:
         base_url:
@@ -2208,6 +2423,10 @@ components:
           title: Rank
         scores:
           $ref: '#/components/schemas/Scores'
+        extraction:
+          anyOf:
+          - $ref: '#/components/schemas/ExtractionInfo'
+          - type: 'null'
       type: object
       required:
       - chunk_id
@@ -2330,6 +2549,10 @@ components:
         updated_at:
           type: string
           title: Updated At
+        extraction:
+          anyOf:
+          - $ref: '#/components/schemas/ExtractionInfo'
+          - type: 'null'
       type: object
       required:
       - request_id

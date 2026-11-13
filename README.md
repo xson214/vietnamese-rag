@@ -1,10 +1,10 @@
 **Vietnamese RAG — hỏi đáp tài liệu tiếng Việt có nguồn và số trang.**
 
-Bản MVP gồm FastAPI, React/TypeScript, ingestion PDF/DOCX, chunking, dense retrieval + BM25 + RRF, reranking, chat có citation, xử lý thiếu bằng chứng, version index và bộ chạy đánh giá. Đây là code triển khai ban đầu; các mục nghiên cứu trong [kế hoạch](KE_HOACH_DU_AN.md) cần tiếp tục bằng corpus thật và gold được kiểm tra thủ công.
+Bản MVP gồm FastAPI, React/TypeScript, ingestion PDF/DOCX, OCR ảnh JPG/PNG/WebP và PDF scan, chunking, dense retrieval + BM25 + RRF, reranking, chat có citation, xử lý thiếu bằng chứng, version index và bộ chạy đánh giá. Đây là code triển khai ban đầu; các mục nghiên cứu trong [kế hoạch](KE_HOACH_DU_AN.md) cần tiếp tục bằng corpus thật và gold được kiểm tra thủ công.
 
 Địa chỉ sau khi khởi chạy: [giao diện](http://127.0.0.1:5173), [Swagger API](http://127.0.0.1:8000/docs). Với Docker Compose, giao diện ở [cổng 8080](http://127.0.0.1:8080).
 
-Mặc định là **demo cục bộ**: vector hash, reranker lexical và trả trích đoạn, không tải model/không gọi LLM. Chế độ này kiểm tra được luồng dữ liệu và nguồn nhưng không chứng minh chất lượng Semantic Search hoặc LLM. Health, trace và giao diện có nhãn demo. Adapter neural thật và LLM API được cung cấp riêng qua cấu hình, không tự fallback khi lỗi. Confidence hiện luôn `null`.
+Mặc định dùng **embedding thật chạy cục bộ** `intfloat/multilingual-e5-small`, revision `614241f622f53c4eeff9890bdc4f31cfecc418b3`, kết hợp BM25. Embedding không cần API key; lần đầu cần tải model. Reranker vẫn lexical, trả lời mặc định trích đoạn; chọn LLM API trong Cấu hình để sinh câu trả lời. Nhãn demo vẫn xuất hiện khi reranker hoặc generation còn ở chế độ demo. Không tự fallback sang hash khi model lỗi. Confidence hiện luôn `null`.
 
 **Chạy cục bộ trên Windows với Python 3.12 và Node 22.**
 
@@ -20,8 +20,12 @@ Nếu đã có repo, vào đúng thư mục và chạy `git pull --ff-only` đ�
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r backend/requirements.lock
+.\.venv\Scripts\python.exe -m pip install "torch==2.15.0" --index-url https://download.pytorch.org/whl/cpu
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements-neural.lock
 npm.cmd --prefix frontend ci
 .\.venv\Scripts\python.exe scripts/make_samples.py
+.\.venv\Scripts\python.exe scripts/setup_ocr.py
+.\.venv\Scripts\python.exe scripts/setup_embedding.py
 ```
 
 Terminal thứ nhất chạy backend:
@@ -40,6 +44,39 @@ Mở http://127.0.0.1:5173, upload `data/samples/quy-trinh-demo.pdf`, chờ tr�
 
 Local mặc định dùng snapshot NumPy và SQLite trong `data/runtime`; không cần Qdrant để thử pipeline. Chỉ chạy **một process/worker** trên một DATA_DIR; file lease ngăn hai tiến trình cùng ghi. Không dùng `--workers 2` hoặc nhiều replica với thiết kế SQLite hiện tại. Backend phục vụ local; frontend proxy API nên không cần mở CORS rộng.
 
+**Chụp ảnh tài liệu hoặc đơn thuốc để hỏi bằng OCR.**
+
+1. Windows: cài dependencies từ `backend/requirements.lock` như trên; có sẵn Python binding Tesseract trong `.venv`. Chạy `scripts/setup_ocr.py` bằng Python của `.venv` để tải dữ liệu `vie+eng` từ repository Tesseract chính thức (revision và SHA-256 được khóa). Không tải ảnh của bạn lên dịch vụ nào trong bước setup này.
+2. Khởi động lại backend sau khi cài. Với máy đang chạy trong phiên triển khai, OCR và dữ liệu ngôn ngữ đã được cài vào `.venv` và `data/runtime/tessdata`.
+3. Bấm **Thêm tài liệu** để chọn JPG/JPEG, PNG hoặc WebP, hoặc **Chụp ảnh tài liệu** trên điện thoại có hỗ trợ camera. HEIC/ảnh động chưa hỗ trợ; chuyển sang JPG/PNG trước khi tải.
+4. Chụp đủ trang, thẳng, đủ sáng, chữ rõ và không bị lóa. Giới hạn 20 MiB/file và 24 triệu điểm ảnh. Chờ trạng thái **Sẵn sàng** và badge **OCR**.
+5. Chọn riêng ảnh cần hỏi, ví dụ “Đọc các tên thuốc được ghi trên đơn” hoặc “Theo đơn, cách dùng được ghi như thế nào?”. Mở nguồn để đối chiếu chữ/con số trên ảnh gốc; ảnh được hiển thị thành PDF một trang, không thay bằng văn bản OCR giả lập.
+
+OCR chạy **cục bộ, không cần API key**. Muốn câu trả lời tổng hợp mạch lạc hơn, có thể bật Gemini/LLM ở mục cài đặt bên dưới. Khi bật API, câu hỏi và các đoạn text OCR được truy xuất sẽ gửi đến provider đã chọn; OCR không gửi ảnh gốc ra ngoài. Giữ chế độ trích xuất để xử lý hoàn toàn cục bộ.
+
+Nếu PDF scan có lớp OCR cũ bị lỗi tiếng Việt, bản mới tự phát hiện các trang có dấu hiệu hỏng và đọc lại từ ảnh. Với tài liệu đã tải trước khi cập nhật, bấm **Đọc lại tài liệu**, chờ **Sẵn sàng** rồi hỏi lại. Thao tác tạo phiên bản tài liệu/index mới, giữ nguyên citation và nguồn cũ; upload lại cùng file không thay thế index. Nếu đọc lại thất bại, dùng nút thử xử lý lại sau khi kiểm tra thông báo lỗi.
+
+Không gian làm việc có vùng tài liệu rộng hơn, tên file xuống dòng, tìm theo tên và thao tác chọn/bỏ chọn nhanh. Để hỏi riêng một file: bấm **Bỏ chọn**, lọc tên rồi **Chọn kết quả**. Trên điện thoại, bấm **Tài liệu** để mở danh sách gần toàn màn hình.
+
+Tesseract ưu tiên chữ in; chữ viết tay trên đơn thuốc hoặc ảnh mờ không được bảo đảm đọc chính xác. Token có tín hiệu nhận dạng thấp được thay bằng `[không rõ]`. Khi câu hỏi về thuốc/liều liên quan phần này, hệ thống yêu cầu ảnh rõ hơn và không đoán. Confidence của OCR không phải xác suất liều/tên thuốc đúng; OCR vẫn có thể sai ở phần không bị che. Sản phẩm chỉ hỗ trợ đọc nội dung ghi trên ảnh, không kê đơn hoặc quyết định tăng/giảm/đổi/ngừng thuốc. Hỏi bác sĩ/dược sĩ khi không rõ nội dung dùng thuốc.
+
+PDF scan và PDF hỗn hợp được OCR ở trang có ảnh nhưng không trích xuất được text, tối đa 20 trang OCR/lần; trang text tiếp tục đọc bằng pypdf. Metadata `extraction` cho biết phương pháp, trang OCR và cảnh báo. Bản này chưa OCR thêm vùng ảnh nếu trang đã có text (ví dụ chỉ một header), và không bảo đảm nhận diện bảng phức tạp.
+
+Với Linux native, cài Tesseract CLI cùng dữ liệu `vie`/`eng` theo [hướng dẫn Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html), rồi đặt `OCR_DATA_DIR` trỏ đúng thư mục `.traineddata`. Windows cũng có thể dùng Tesseract CLI nếu đặt `TESSERACT_PATH`. Docker image đã có CLI và hai gói ngôn ngữ, không cần chạy setup Windows trong container.
+
+| Biến OCR | Mặc định | Ý nghĩa |
+|---|---|---|
+| OCR_ENABLED | true | Bật/tắt OCR ảnh và PDF scan |
+| OCR_LANGUAGES | vie+eng | Ngôn ngữ Tesseract |
+| OCR_DATA_DIR | data/runtime/tessdata với native | Thư mục model ngôn ngữ; Docker dùng đường dẫn hệ thống |
+| TESSERACT_PATH | tesseract | Executable CLI nếu đã cài; Windows không có CLI dùng binding |
+| OCR_TIMEOUT | 60 | Timeout giây cho subprocess OCR mỗi trang |
+| OCR_MIN_CONFIDENCE | 60 | Ngưỡng che token nhận dạng thấp, không phải medical confidence |
+| OCR_MAX_PAGES | 20 | Số trang scan tối đa cho một tài liệu |
+| MAX_IMAGE_PIXELS | 24000000 | Giới hạn kích thước ảnh/render |
+
+Thiếu engine hoặc model ngôn ngữ sẽ báo lỗi trong trạng thái tài liệu; cài engine/chạy setup rồi **Thử xử lý lại**. Script `scripts/make_ocr_sample.py` tạo ảnh tiếng Việt thử nghiệm không chứa thông tin bệnh nhân. Xem [thiết kế OCR](docs/ocr-engine.md) để biết preprocessing, giới hạn và lỗi cụ thể.
+
 **Docker Compose cung cấp thêm Qdrant và bộ chuyển DOCX.**
 
 ```powershell
@@ -51,7 +88,20 @@ Mở http://127.0.0.1:8080. Backend dùng cổng 8000, Qdrant chỉ ở mạng n
 
 Docker Engine phải hoạt động trước khi chạy. `docker compose config --quiet` đã được kiểm tra trong môi trường phát triển; build/run container chưa được xác nhận vì Docker Engine trên máy hiện chưa chạy. Giữ volumes khi dừng demo bằng `docker compose down`.
 
-**Bật Semantic Search và reranking neural thực.**
+**Embedding mặc định và nâng cấp reranking.**
+
+Đã chuyển mặc định từ vector hash sang embedding E5 thật chạy cục bộ, vector chuẩn hóa L2 384 chiều, kết hợp BM25. Phiên kiểm chứng ngày 13/11/2026 đã dựng index mới cho 8 tài liệu / 432 chunks, chạy tìm kiếm dense-only qua HTTP và kiểm tra citation; 169 tests và 2 subtests đạt. Đây là xác minh chức năng, chưa phải benchmark độ chính xác trên gold. Các index đã xuất bản giữ nguyên để đối chiếu; không đưa model cache hoặc tài liệu người dùng lên GitHub.
+
+Các thay đổi đi kèm gồm OCR ảnh/PDF scan và phát hiện lớp OCR cũ bị hỏng; nút **Đọc lại tài liệu** tạo phiên bản mới mà vẫn giữ nguồn cũ; vùng chọn tài liệu rộng hơn, tên file xuống dòng và thao tác chọn/lọc thuận tiện. Câu hỏi liều dùng theo khoảng tuổi chỉ trích điều kiện sử dụng rõ trong nguồn và yêu cầu dữ kiện còn thiếu, không tự tính liều.
+
+Model embedding đã là mặc định cho các tài liệu mới. Cache model ở `data/runtime/models`. Nếu corpus được tạo bằng hash trước đây, dừng backend và tạo index mới (không ghi đè bản cũ):
+
+```powershell
+$env:PYTHONPATH='backend'
+.\.venv\Scripts\python.exe -m app.reindex --config experiments/configs/multilingual-e5.json
+```
+
+Khởi động lại backend rồi mở Chi tiết truy xuất: embedding phải chứa `sentence_transformers` và tên E5. Chọn generation API không thay embedding. Có thể chọn `EMBEDDING_BACKEND=hash` riêng cho kiểm thử/demo offline; đây không còn là mặc định ứng dụng.
 
 Local cài thêm thư viện:
 
@@ -65,9 +115,9 @@ $env:CHUNK_SIZE='120'
 $env:CHUNK_OVERLAP='20'
 ```
 
-Model tải ở lần build đầu, cần mạng và đủ RAM/VRAM. Embedding E5 dùng tiền tố query/passage đúng vai trò. Manifest lưu commit model đã resolve; input vượt giới hạn tokenizer bị từ chối thay vì cắt âm thầm. `CHUNK_SIZE` của các chiến lược hiện tính theo whitespace token; luôn kiểm tra thêm giới hạn tokenizer model. Đặt `EMBEDDING_REVISION`/`RERANKER_REVISION` bằng commit hash để khóa từ đầu. Dependency neural chưa có lock thực nghiệm; sau khi cài trên máy mục tiêu cần lưu freeze và kết quả vào manifest thí nghiệm.
+Model tải ở lần build đầu, cần mạng và đủ RAM/VRAM. Embedding E5 dùng tiền tố query/passage đúng vai trò. Manifest lưu commit model; input vượt giới hạn tokenizer bị từ chối thay vì cắt âm thầm. `CHUNK_SIZE` mặc định 120, overlap 20, tính theo whitespace token; kiểm tra thêm giới hạn tokenizer model. Dependency neural được khóa tại `backend/requirements-neural.lock`; model/reranker khác cần benchmark riêng.
 
-Với Compose, đặt `INSTALL_NEURAL=true`, `EMBEDDING_BACKEND=sentence_transformers`, `RERANKER_BACKEND=cross_encoder` trong `.env`, rồi build lại. Chế độ này dùng Qdrant. Model neural/Qdrant server chưa được chạy thực nghiệm trong phiên bàn giao; các tests mặc định dùng demo, các provider tests dùng mock.
+Compose mặc định `INSTALL_NEURAL=true`, `EMBEDDING_BACKEND=sentence_transformers`; đặt thêm `RERANKER_BACKEND=cross_encoder` nếu muốn chạy reranker neural rồi build lại. Chế độ này dùng Qdrant. Qdrant/container chưa được kiểm chứng trên máy hiện tại; unit/API tests dùng hash tường minh để không tải model, provider tests dùng mock. Smoke embedding thật được kiểm tra riêng trên corpus cục bộ.
 
 **Bật sinh câu trả lời bằng LLM API.**
 
@@ -152,7 +202,7 @@ Generation gửi JSON Schema rõ ràng bằng `response_format: json_schema`, g�
 
 **Index bất biến và vòng đời tài liệu đã có đường chạy.**
 
-- Upload giới hạn 20 MiB và 300 trang; giữ trang vật lý PDF, NFC/LF và Unicode code point offsets. DOCX chuyển thành PDF chuẩn cố định. OCR, bảng phức tạp và PDF scan chưa được hỗ trợ.
+- Upload giới hạn 20 MiB và 300 trang; ảnh tối đa 24 triệu điểm ảnh, tối đa 20 trang cần OCR. Giữ trang vật lý PDF, NFC/LF và Unicode code point offsets. DOCX chuyển thành PDF chuẩn cố định; ảnh và PDF scan dùng OCR cục bộ. Bảng phức tạp/chữ viết tay chưa được bảo đảm nhận dạng chính xác.
 - Dense snapshot và BM25 sử dụng cùng tập chunk. Với corpus MVP, BM25 tính từ text/chunk snapshot bất biến ở mỗi query, chưa có inverted index tối ưu riêng.
 - Build staging rồi publish active pointer trong SQLite; mỗi request pin phiên bản và query embedder. Tài liệu mới tạo generation mới, các generation cũ vẫn chọn được bằng index_version.
 - DELETE thu hồi mọi generation chứa tài liệu ngay; cleanup chạy bằng job bền vững, retry DELETE khi delete_failed. Request đang chạy recheck trước trả; không hồi sinh tài liệu qua ingestion retry.
@@ -187,6 +237,15 @@ Với hai server đang chạy và PDF mẫu đã tạo, kiểm tra HTTP thật:
 $smokeIndex = Get-Content evaluation/results/smoke-index.txt
 .\.venv\Scripts\python.exe -m evaluation.run --dataset evaluation/results/smoke-gold.json --index-version $smokeIndex --output evaluation/results/my-smoke-run --allow-fixtures
 ```
+
+Kiểm tra OCR thật sau khi chạy setup OCR và khởi động backend (chỉ dùng dữ liệu mẫu, không chứa thông tin bệnh nhân):
+
+```powershell
+.\.venv\Scripts\python.exe scripts/make_ocr_sample.py
+.\.venv\Scripts\python.exe scripts/smoke_ocr.py
+```
+
+Lệnh kiểm tra upload ảnh và PDF scan, chờ OCR, hỏi đáp và xác minh nguồn trang 1. Đây là smoke test chữ in rõ, không phải đánh giá độ chính xác trên đơn thuốc viết tay thực tế.
 
 Output directory benchmark phải chưa tồn tại để không ghi đè run cũ. Smoke tạo đúng hai câu fixture để kiểm tra phần mềm; kết quả không đại diện cho chất lượng nghiên cứu. Bộ 180 câu gold, annotation/review, benchmark model thật và calibration confidence vẫn cần thực hiện theo [protocol](docs/evaluation-protocol.md). Runner có Evidence Recall@5, MRR@10, all-evidence, abstention precision/recall_all, lỗi và latency; correctness/citation ngữ nghĩa được để trống cho người chấm.
 

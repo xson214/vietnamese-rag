@@ -141,6 +141,15 @@ class ErrorResponse(BaseModel):
     error: ErrorInfo
 
 
+class ExtractionInfo(BaseModel):
+    model_config = ConfigDict(extra='allow')
+    method: Literal['text', 'ocr', 'mixed']
+    ocr_pages: list[int] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    engine: str | None = None
+    languages: str | list[str] | None = None
+
+
 class Document(BaseModel):
     document_id: str
     document_version: int
@@ -155,6 +164,7 @@ class Document(BaseModel):
     error: ErrorInfo | None
     created_at: str
     updated_at: str
+    extraction: ExtractionInfo | None = None
 
 
 class DocumentResponse(BaseModel):
@@ -180,6 +190,7 @@ class StatusResponse(BaseModel):
     available_index_versions: list[str]
     error: ErrorInfo | None
     updated_at: str
+    extraction: ExtractionInfo | None = None
 
 
 class DeleteResponse(BaseModel):
@@ -212,6 +223,7 @@ class SearchHit(BaseModel):
     source_spans: list[SourceSpan]
     rank: int
     scores: Scores
+    extraction: ExtractionInfo | None = None
 
 
 class RetrievalTrace(BaseModel):

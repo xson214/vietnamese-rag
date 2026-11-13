@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 .env
 data/runtime/
+backend/data/runtime/
 data/raw/
 data/processed/
 frontend/node_modules/

@@ -1,5 +1,6 @@
 export type DocumentStatus = 'queued' | 'processing' | 'ready' | 'failed' | 'deleting' | 'delete_failed'
-export type Document = {document_id: string; document_version: number; filename: string; mime_type: string; size_bytes: number; status: DocumentStatus; page_count: number | null; available_index_versions: string[]; source_url: string | null; error: {code: string; message: string} | null}
+export type Extraction = {method: 'text' | 'ocr' | 'mixed'; ocr_pages: number[]; warnings: string[]; engine?: string; languages?: string | string[]}
+export type Document = {document_id: string; document_version: number; filename: string; mime_type: string; size_bytes: number; status: DocumentStatus; page_count: number | null; available_index_versions: string[]; source_url: string | null; error: {code: string; message: string} | null; extraction?: Extraction | null}
 export type RetrievalConfig = {dense: boolean; bm25: boolean; reranking: boolean; top_k: number}
 export type GenerationConfig = {backend: 'extractive' | 'api'; base_url: string; model: string; api_key: string}
 export type Citation = {source_id: string; document_id: string; document_version: number; filename: string; page_number: number; quote: string; source_url: string}
