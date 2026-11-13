@@ -1493,6 +1493,162 @@ paths:
               description: Server-generated request ID
               schema:
                 type: string
+  /api/v1/models:
+    post:
+      tags:
+      - settings
+      summary: Models
+      operationId: models_api_v1_models_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelsRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelsResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '410':
+          description: Gone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '413':
+          description: Request Entity Too Large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '502':
+          description: Bad Gateway
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '504':
+          description: Gateway Timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
   /api/v1/health:
     get:
       tags:
@@ -1546,6 +1702,8 @@ components:
           maxLength: 4000
           minLength: 1
           title: Question
+        generation_config:
+          $ref: '#/components/schemas/GenerationConfig'
       additionalProperties: false
       type: object
       required:
@@ -1826,6 +1984,34 @@ components:
       - request_id
       - error
       title: ErrorResponse
+    GenerationConfig:
+      properties:
+        base_url:
+          type: string
+          maxLength: 2048
+          title: Base Url
+          default: ''
+        api_key:
+          type: string
+          maxLength: 8192
+          format: password
+          title: Api Key
+          writeOnly: true
+        backend:
+          type: string
+          enum:
+          - extractive
+          - api
+          title: Backend
+          default: extractive
+        model:
+          type: string
+          maxLength: 200
+          title: Model
+          default: ''
+      additionalProperties: false
+      type: object
+      title: GenerationConfig
     HealthResponse:
       properties:
         request_id:
@@ -1865,6 +2051,39 @@ components:
       - components
       - modes
       title: HealthResponse
+    ModelsRequest:
+      properties:
+        base_url:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Base Url
+        api_key:
+          type: string
+          maxLength: 8192
+          format: password
+          title: Api Key
+          writeOnly: true
+      additionalProperties: false
+      type: object
+      required:
+      - base_url
+      title: ModelsRequest
+    ModelsResponse:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        models:
+          items:
+            type: string
+          type: array
+          title: Models
+      type: object
+      required:
+      - request_id
+      - models
+      title: ModelsResponse
     RetrievalConfig:
       not:
         properties:

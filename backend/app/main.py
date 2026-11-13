@@ -12,9 +12,10 @@ from .config import Settings
 from .errors import ApiError
 from .generation import Generator
 from .ingestion import DOCX, PDF
+from .model_settings import fetch_models, resolve_generation_settings
 from .schemas import (ChatRequest, ChatResponse, DeleteResponse, DocumentListResponse,
                       DocumentResponse, ErrorResponse, HealthResponse, SearchRequest,
-                      SearchResponse, StatusResponse)
+                      SearchResponse, StatusResponse, ModelsRequest, ModelsResponse)
 from .store import Store, now, uid
 
 log = logging.getLogger(__name__)
@@ -160,10 +161,16 @@ def create_app(settings=None):
 
     @app.post('/api/v1/chat', response_model=ChatResponse, responses=ERRORS, tags=['chat'])
     def chat(payload: ChatRequest, request: Request):
+        resolved = resolve_generation_settings(settings, payload.generation_config)
         version, hits, trace = retrieve(payload, payload.question)
-        result = generator.answer(payload.question, hits, trace)
+        selected = Generator(resolved) if payload.generation_config is not None else generator
+        result = selected.answer(payload.question, hits, trace)
         store.recheck(version)
         return body(request, **result)
+
+    @app.post('/api/v1/models', response_model=ModelsResponse, responses=ERRORS, tags=['settings'])
+    def models(payload: ModelsRequest, request: Request):
+        return body(request, models=fetch_models(payload))
 
     @app.get('/api/v1/health', response_model=HealthResponse, responses={'503': {'model': HealthResponse}}, tags=['system'])
     def health(request: Request, response: Response):

@@ -1,5 +1,9 @@
 **Trạng thái bàn giao MVP ngày 13/11/2026.**
 
+Cập nhật tiếp theo cùng ngày: đã sửa generation cho slide PDF xuống dòng và thêm cài đặt model/API key riêng từng tab. Bộ kiểm thử hiện đạt 73 tests và 2 subtests. Xem [phân tích lỗi và xác minh](fix-az-and-model-settings.md). Các số 54 bên dưới ghi lại mốc bàn giao MVP ban đầu.
+
+Cập nhật tương thích Gemini sau đó: structured JSON Schema, chuẩn hóa định dạng và repair hữu hạn; hiện toàn bộ 100 tests và 2 subtests đạt. Xem [khắc phục LLM_BAD_RESPONSE](fix-gemini-response-schema.md). Các số 73 ở đoạn trên là mốc trước bản sửa này.
+
 Code được triển khai từ [kế hoạch](../KE_HOACH_DU_AN.md), với [API contract](api-contract.md) và [OpenAPI sinh từ code](openapi.yaml). Repo Git cục bộ đã khởi tạo nhánh main, chưa có commit hoặc remote GitHub. Không chứa API key hoặc tài liệu của người dùng.
 
 | Phần | Đã thực hiện | Bằng chứng/giới hạn |

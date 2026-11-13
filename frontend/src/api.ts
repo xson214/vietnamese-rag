@@ -1,8 +1,9 @@
 export type DocumentStatus = 'queued' | 'processing' | 'ready' | 'failed' | 'deleting' | 'delete_failed'
 export type Document = {document_id: string; document_version: number; filename: string; mime_type: string; size_bytes: number; status: DocumentStatus; page_count: number | null; available_index_versions: string[]; source_url: string | null; error: {code: string; message: string} | null}
 export type RetrievalConfig = {dense: boolean; bm25: boolean; reranking: boolean; top_k: number}
+export type GenerationConfig = {backend: 'extractive' | 'api'; base_url: string; model: string; api_key: string}
 export type Citation = {source_id: string; document_id: string; document_version: number; filename: string; page_number: number; quote: string; source_url: string}
-export type Trace = {resolved_index_version: string; corpus_snapshot_id: string; embedding_model_version: string; chunking_config_id: string; candidate_count: number; reranked_count: number; returned_count: number; context_chunk_count: number; effective_config: RetrievalConfig}
+export type Trace = {resolved_index_version: string; corpus_snapshot_id: string; embedding_model_version: string; chunking_config_id: string; candidate_count: number; reranked_count: number; returned_count: number; context_chunk_count: number; effective_config: RetrievalConfig; generation_backend?: string; llm_model?: string | null}
 export type Answer = {request_id: string; status: 'answered' | 'insufficient_evidence'; answer: string; citations: Citation[]; confidence: {level: string; score: number | null} | null; retrieval_trace: Trace}
 export type Health = {status: 'ok' | 'degraded' | 'unavailable'; active_index_version: string | null; components: Record<string, string>; modes?: {embedding?: string; reranker?: string; generation?: string}}
 export class ApiError extends Error {

@@ -26,6 +26,7 @@ Ngày cập nhật: 13/11/2026. Chủ trì A: tài liệu và health; B: search;
 | GET | `/api/v1/documents/{id}/source` | A | 200 PDF chuẩn theo document_version |
 | POST | `/api/v1/search` | B | 200 các đoạn truy xuất |
 | POST | `/api/v1/chat` | C | 200 answered hoặc insufficient_evidence |
+| POST | `/api/v1/models` | C | 200 danh sách model của endpoint người dùng chọn |
 | GET | `/api/v1/health` | A | 200 ready/degraded; 503 unavailable |
 
 Route `/source` bổ sung để thực hiện chức năng mở trích dẫn đã có trong kế hoạch. Không còn public route `/ask` hoặc `/jobs`; frontend polling theo document status.
@@ -118,6 +119,24 @@ Request minh họa (ID chỉ là fixture, không phải dữ liệu đã chạy)
 }
 ```
 
+Chat nhận thêm `generation_config` tùy chọn, riêng từng request:
+
+```json
+{
+  "question": "Availability Zone là gì?",
+  "generation_config": {
+    "backend": "api",
+    "base_url": "https://provider.example/v1",
+    "model": "model-id-do-provider-cung-cap",
+    "api_key": "<key-nhap-trong-giao-dien>"
+  }
+}
+```
+
+Không có trường này thì dùng cấu hình mặc định của server. `backend=extractive` dùng trích xuất không cần key; `backend=api` bắt buộc base_url và model. Không gửi null. Key là trường write-only SecretStr, không trả lại, không ghi database/log, không làm thay đổi cấu hình các tab khác. Frontend chỉ giữ key trong RAM của tab; tải lại trang mất cấu hình. Trace bổ sung `generation_backend`, `llm_model` (null khi extractive) và `prompt_version`, không chứa key hoặc URL có thông tin đăng nhập.
+
+`POST /models` nhận `{base_url, api_key}` khi người dùng chủ động bấm tải danh sách; backend gọi `GET {base_url}/models`, trả `{request_id, models: ["model-id", ...]}`. Nếu provider không hỗ trợ list thì cho nhập model ID thủ công. URL giới hạn HTTPS công khai hoặc HTTP loopback, không nhận userinfo/query/fragment/địa chỉ metadata hoặc LAN; không follow redirect. Lỗi mới gồm INVALID_MODEL_ENDPOINT (422), MODEL_AUTH_FAILED (502), MODEL_LIST_BAD_RESPONSE (502). Không trả raw error body của provider vì có thể chứa key. Đây là chức năng cho bản demo cục bộ; không mở proxy này ra Internet cho người dùng không tin cậy.
+
 Response answered bắt buộc có answer không rỗng, citations ít nhất một phần tử, confidence và retrieval_trace. Citation gồm source_id, document_id, document_version, filename, page_number, quote, source_span và source_url. Mỗi citation thuộc một trang; nếu khẳng định cần hai trang, trả hai citation. source_id duy nhất trong request, do backend cấp; answer dùng marker `[src_001]` để liên kết với mảng citations. Mọi marker phải trỏ đến citation và mọi citation phải được sử dụng; kiểm tra thêm quan hệ bằng chứng–khẳng định theo rubric, không chỉ ID hợp lệ.
 
 ```json
@@ -177,7 +196,9 @@ Response thiếu bằng chứng trả HTTP 200, status insufficient_evidence, an
 }
 ```
 
-Không trả status answered nếu citation không hợp lệ. Nếu LLM trả malformed output hoặc citation ngoài context, có thể sửa lại một lần có giới hạn; vẫn lỗi thì trả 502 `LLM_BAD_RESPONSE` hoặc `CITATION_VALIDATION_FAILED`, không ngụy trang thành thiếu bằng chứng. Timeout, Qdrant/BM25 lỗi và LLM API lỗi phải đi theo error envelope.
+Không trả status answered nếu citation không hợp lệ. Generation gửi JSON Schema gồm đúng status/answer/source_ids và enum ID được cấp. Chỉ khi provider báo rõ không hỗ trợ structured schema mới thương lượng xuống json_object. Nếu LLM trả malformed output hoặc citation ngoài context, yêu cầu tạo lại một lần có giới hạn; vẫn lỗi thì trả 502 `LLM_BAD_RESPONSE` hoặc `CITATION_VALIDATION_FAILED`, không ngụy trang thành thiếu bằng chứng. Tổng timeout áp dụng cho mọi attempt; tối đa ba HTTP calls khi cần cả thương lượng và repair. Trace có generation_attempts, response_format và response_repaired. Không có key/raw provider content trong trace hoặc lỗi.
+
+Chuẩn hóa an toàn gồm bỏ code fence JSON bao toàn bộ nội dung, nhận text parts/parsed JSON, loại metadata model không được tin cậy, chuẩn hóa source_ids chuỗi đơn/loại lặp. Nếu model đã trả answered cùng marker thì có thể khôi phục danh sách ID từ marker, sau đó vẫn kiểm tra từng ID thuộc context. Không suy ra answer/status hoặc tự bổ sung marker. Phản hồi bị cắt trả LLM_OUTPUT_TRUNCATED, model refusal/content_filter trả LLM_REFUSED; các ca này không repair tự động. Timeout, Qdrant/BM25 lỗi và LLM API lỗi phải đi theo error envelope.
 
 **Lỗi HTTP dùng một envelope chung để frontend không phải đoán.**
 
@@ -205,7 +226,7 @@ Không trả status answered nếu citation không hợp lệ. Nếu LLM trả m
 | 422 | VALIDATION_ERROR, INVALID_DOCUMENT |
 | 429 | RATE_LIMITED, kèm Retry-After nếu server giới hạn |
 | 500 | INTERNAL_ERROR |
-| 502 | LLM_BAD_RESPONSE, CITATION_VALIDATION_FAILED, UPSTREAM_ERROR |
+| 502 | LLM_BAD_RESPONSE, CITATION_VALIDATION_FAILED, LLM_OUTPUT_TRUNCATED, LLM_REFUSED, UPSTREAM_ERROR |
 | 503 | DEPENDENCY_UNAVAILABLE, INDEX_NOT_READY, CONFIGURATION_MISSING |
 | 504 | UPSTREAM_TIMEOUT |
 

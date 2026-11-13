@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 
 class StrictModel(BaseModel):
@@ -23,7 +23,9 @@ class RetrievalConfig(StrictModel):
 
 
 def scope_schema(schema):
-    for field in ('document_ids', 'index_version'):
+    for field in ('document_ids', 'index_version', 'generation_config'):
+        if field not in schema['properties']:
+            continue
         prop = schema['properties'][field]
         prop.update(prop.pop('anyOf')[0])
         prop.pop('default', None)
@@ -60,8 +62,60 @@ class SearchRequest(ScopedRequest):
         return value.strip() if isinstance(value, str) else value
 
 
+class ModelConnection(StrictModel):
+    base_url: str = Field(default='', max_length=2048)
+    api_key: SecretStr = Field(default_factory=lambda: SecretStr(''), max_length=8192)
+
+    @field_validator('base_url', mode='before')
+    @classmethod
+    def trim_url(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator('api_key')
+    @classmethod
+    def key_no_controls(cls, value):
+        if any(ord(char) < 32 or ord(char) == 127 for char in value.get_secret_value()):
+            raise ValueError('API key không được chứa ký tự điều khiển.')
+        return value
+
+
+class GenerationConfig(ModelConnection):
+    backend: Literal['extractive', 'api'] = 'extractive'
+    model: str = Field(default='', max_length=200)
+
+    @field_validator('model', mode='before')
+    @classmethod
+    def trim_model(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode='after')
+    def api_fields(self):
+        if self.backend == 'api' and (not self.base_url or not self.model):
+            raise ValueError('Chế độ API cần base_url và model.')
+        if any(ord(char) < 32 for char in self.model):
+            raise ValueError('Model không được chứa ký tự điều khiển.')
+        return self
+
+
+class ModelsRequest(ModelConnection):
+    base_url: str = Field(min_length=1, max_length=2048)
+
+
+class ModelsResponse(BaseModel):
+    request_id: str
+    models: list[str]
+
+
 class ChatRequest(ScopedRequest):
     question: str = Field(min_length=1, max_length=4000)
+    generation_config: GenerationConfig | None = None
+
+    @field_validator('generation_config', mode='before')
+    @classmethod
+    def no_null_config(cls, value):
+        if value is None:
+            raise ValueError('Bỏ qua generation_config nếu dùng cấu hình máy chủ; không gửi null.')
+        return value
 
     @field_validator('question', mode='before')
     @classmethod

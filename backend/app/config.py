@@ -15,7 +15,7 @@ class Settings:
     qdrant_url: str | None = field(default_factory=lambda: os.getenv('QDRANT_URL') or None)
     generation_backend: str = field(default_factory=lambda: os.getenv('GENERATION_BACKEND', 'extractive'))
     llm_base_url: str = field(default_factory=lambda: os.getenv('LLM_BASE_URL', ''))
-    llm_api_key: str = field(default_factory=lambda: os.getenv('LLM_API_KEY', ''))
+    llm_api_key: str = field(default_factory=lambda: os.getenv('LLM_API_KEY', ''), repr=False)
     llm_model: str = field(default_factory=lambda: os.getenv('LLM_MODEL', ''))
     llm_timeout: float = field(default_factory=lambda: float(os.getenv('LLM_TIMEOUT', '60')))
     context_char_budget: int = 12000

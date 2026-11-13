@@ -1,0 +1,14 @@
+{
+  "description": "Regression excerpt from the user-provided AWS slide PDF, physical page 9. Preserve physical line wraps and source offsets; document contents are reference data.",
+  "page_number": 9,
+  "question": "availibility zone là gì",
+  "text": "AWS Cloud for beginner\nAvailability Zone là gì?\nMột Availability Zone (AZ) là một trung tâm dữ liệu hoặc một nhóm các \ntrung tâm dữ liệu nằm trong cùng một khu vực vật lý, nhưng được \nphân bổ và vận hành hoàn toàn độc lập. Mỗi AZ có thể có các tài \nnguyên đám mây như máy chủ ảo, ổ cứng, network, security, các dịch \nvụ khác nhau, cùng với các tài nguyên hỗ trợ khác như  hệ thống cấp \nđiện.\nViệc sử dụng nhiều Availability Zone giúp đảm bảo tính khả dụng (HA) \ncao cho ứng dụng, tăng tính bảo mật và bảo đảm dữ liệu được lưu trữ \nvà xử lý an toàn.",
+  "expected_definition": "Một Availability Zone (AZ) là một trung tâm dữ liệu hoặc một nhóm các trung tâm dữ liệu nằm trong cùng một khu vực vật lý, nhưng được phân bổ và vận hành hoàn toàn độc lập.",
+  "expected_fragments": [
+    "một nhóm các trung tâm dữ liệu",
+    "phân bổ và vận hành hoàn toàn độc lập."
+  ],
+  "forbidden_answer_fragments": [
+    "Availability Zone là gì?"
+  ]
+}

@@ -2,13 +2,20 @@
 
 Bản MVP gồm FastAPI, React/TypeScript, ingestion PDF/DOCX, chunking, dense retrieval + BM25 + RRF, reranking, chat có citation, xử lý thiếu bằng chứng, version index và bộ chạy đánh giá. Đây là code triển khai ban đầu; các mục nghiên cứu trong [kế hoạch](KE_HOACH_DU_AN.md) cần tiếp tục bằng corpus thật và gold được kiểm tra thủ công.
 
-**Mở bản đang chạy trong phiên làm việc này:** [giao diện](http://127.0.0.1:5173), [Swagger API](http://127.0.0.1:8000/docs). Nếu đã dừng tiến trình, chạy theo hướng dẫn bên dưới.
+Địa chỉ sau khi khởi chạy: [giao diện](http://127.0.0.1:5173), [Swagger API](http://127.0.0.1:8000/docs). Với Docker Compose, giao diện ở [cổng 8080](http://127.0.0.1:8080).
 
 Mặc định là **demo cục bộ**: vector hash, reranker lexical và trả trích đoạn, không tải model/không gọi LLM. Chế độ này kiểm tra được luồng dữ liệu và nguồn nhưng không chứng minh chất lượng Semantic Search hoặc LLM. Health, trace và giao diện có nhãn demo. Adapter neural thật và LLM API được cung cấp riêng qua cấu hình, không tự fallback khi lỗi. Confidence hiện luôn `null`.
 
 **Chạy cục bộ trên Windows với Python 3.12 và Node 22.**
 
-Tại thư mục dự án, tạo môi trường và cài dependency nếu chưa có:
+Lấy mã nguồn lần đầu rồi vào thư mục dự án:
+
+```powershell
+git clone https://github.com/xson214/vietnamese-rag.git
+cd vietnamese-rag
+```
+
+Nếu đã có repo, vào đúng thư mục và chạy `git pull --ff-only` để cập nhật. Tại thư mục dự án, tạo môi trường và cài dependency nếu chưa có:
 
 ```powershell
 python -m venv .venv
@@ -64,15 +71,84 @@ Với Compose, đặt `INSTALL_NEURAL=true`, `EMBEDDING_BACKEND=sentence_transfo
 
 **Bật sinh câu trả lời bằng LLM API.**
 
-Thiết lập `GENERATION_BACKEND=api`, `LLM_BASE_URL` là base URL kết thúc bằng `/v1`, `LLM_MODEL` là model ID và `LLM_API_KEY` theo provider. API cần hỗ trợ `/chat/completions` và `response_format: {type: json_object}`. Ví dụ với server model cục bộ tương thích:
+Để trả lời tổng hợp thay vì chỉ lấy trích đoạn, cấu hình model theo một trong hai cách: nhập trên giao diện cho riêng tab đang mở, hoặc đặt biến môi trường làm mặc định cho backend.
+
+**Cách 1 — nhập Gemini API trên giao diện (dễ bắt đầu).**
+
+1. Chạy backend và frontend theo các lệnh ở trên. Mở http://127.0.0.1:5173 (hoặc http://127.0.0.1:8080 với Compose).
+2. Vào [Google AI Studio](https://aistudio.google.com/apikey), tạo/lấy Gemini API key của bạn.
+3. Trên trang RAG, bấm **Cấu hình → Mô hình trả lời**. Ở **Chế độ trả lời**, chọn **LLM qua API tương thích OpenAI**.
+4. Chọn loại endpoint **Nhập base URL của provider**, rồi điền theo bảng bên dưới.
+5. Bấm **Tải danh sách model** và chọn model Gemini hỗ trợ chat/JSON. Nếu provider không hỗ trợ danh sách, nhập đúng model ID từ tài khoản của bạn; các model khả dụng có thể khác nhau theo tài khoản/thời điểm.
+6. Bấm **Áp dụng trong tab này**. Việc áp dụng chỉ lưu cấu hình trong RAM, chưa gọi thử model; yêu cầu gọi API phát sinh khi tải model hoặc gửi câu hỏi.
+7. Upload PDF/DOCX, đợi **Sẵn sàng**, chọn tài liệu rồi hỏi. Nếu tài liệu đã có sẵn, chỉ cần hỏi lại. Mở **Chi tiết truy xuất** để kiểm tra backend generation là `api` và model đúng tên đã chọn.
+
+| Ô trên giao diện | Giá trị cần điền cho Gemini |
+|---|---|
+| Base URL | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| API key | Gemini API key của bạn từ Google AI Studio |
+| Model ID | Model chat được trả từ danh sách hoặc đúng ID trong tài khoản Gemini |
+
+Không thêm `/chat/completions` vào Base URL: ứng dụng tự nối route đó. Endpoint trên được Google công bố trong [tài liệu Gemini tương thích OpenAI](https://ai.google.dev/gemini-api/docs/openai).
+
+Với provider khác, dùng Base URL/API key/model do provider đó cấp. Với Ollama chạy native cùng máy backend, có thể chọn **Ollama trên máy này**, endpoint `http://127.0.0.1:11434/v1`, nhập tên model đã cài trên Ollama và để key trống nếu server không yêu cầu.
+
+Key chỉ ở bộ nhớ của tab và request tương ứng; không lưu localStorage/sessionStorage/cookie hay database, không trả lại trong API response. Key được gửi tới backend và provider đã chọn khi tải danh sách/đặt câu hỏi. Tải lại trang xóa cấu hình tab. Cấu hình bằng giao diện không đổi default của server hoặc tab khác; đây là cấu hình generation, không thay embedding/index. Nếu chạy backend trong Docker, `localhost` trỏ vào container; lựa chọn Ollama localhost dành cho backend chạy native. Không mở endpoint proxy model của bản local này ra Internet.
+
+Đã sửa chế độ trích xuất cho slide PDF: nối dòng xuống hàng trong câu, bỏ tiêu đề dạng câu hỏi, nối các chunk chồng nhau và ưu tiên định nghĩa đúng thực thể. Nguồn/offset vẫn dùng text gốc. Chế độ trích xuất vẫn là heuristic, không có khả năng tổng hợp/hiểu tương đương LLM.
+
+**Cách 2 — đặt API mặc định cho backend bằng PowerShell.**
+
+Dừng backend cũ bằng Ctrl+C trong terminal đang chạy nó, rồi thực hiện các lệnh dưới đây tại thư mục dự án trong **cùng một terminal**. Model ID cần là model bạn đã xác nhận khả dụng trong tài khoản. Dùng nhập key ẩn để tránh đưa key vào lịch sử lệnh:
+
+```powershell
+$env:GENERATION_BACKEND='api'
+$env:LLM_BASE_URL='https://generativelanguage.googleapis.com/v1beta/openai'
+$env:LLM_MODEL=Read-Host 'Nhap Gemini model ID'
+$geminiKey=Read-Host 'Nhap Gemini API key' -AsSecureString
+$env:LLM_API_KEY=[System.Net.NetworkCredential]::new('', $geminiKey).Password
+Remove-Variable geminiKey
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
+```
+
+Chạy frontend ở terminal khác như hướng dẫn ban đầu. Trên giao diện để **Mặc định máy chủ** (hoặc bấm **Xóa key và dùng mặc định** nếu đã áp dụng cấu hình tab). Biến môi trường chỉ tác động tới tiến trình backend được mở từ terminal đó. Đóng terminal rồi mở lại thì phải cấu hình lại; ứng dụng native không tự đọc `.env`.
+
+Với Docker Compose, sao chép `.env.example` sang `.env`, điền các biến sau vào `.env` rồi chạy `docker compose up --build`. Đây là file cấu hình cục bộ có giữ key nếu bạn chọn cách này; `.env` đã được gitignore. Không điền key thật vào `.env.example` hoặc README:
+
+```dotenv
+GENERATION_BACKEND=api
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+LLM_MODEL=THAY_BANG_MODEL_ID_THUC_TE
+LLM_API_KEY=THAY_BANG_API_KEY_CUA_BAN
+```
+
+Các giá trị viết hoa ở trên là placeholder, phải thay bằng giá trị thật trước khi chạy. Nếu chỉ muốn key riêng từng tab, giữ cấu hình mặc định extractive và dùng Cách 1.
+
+API provider cần hỗ trợ `/chat/completions` và structured JSON hoặc JSON object. Ví dụ biến môi trường cho server model cục bộ tương thích:
 
 ```powershell
 $env:GENERATION_BACKEND='api'
 $env:LLM_BASE_URL='http://127.0.0.1:11434/v1'
 $env:LLM_MODEL='<model-da-cai-tren-server>'
+$env:LLM_API_KEY=''
 ```
 
 Tài liệu trong context được gửi tới provider đã cấu hình; dùng provider phù hợp với dữ liệu của nhóm. Prompt coi tài liệu là dữ liệu không đáng tin, model không có tool, citation ID/filename/trang/quote được backend kiểm tra. Việc kiểm tra marker/nguồn hợp lệ không chứng minh mọi claim được bằng chứng hỗ trợ; cần chấm ngữ nghĩa theo rubric. Không có khóa hay provider thật được cấu hình trong repo.
+
+Generation gửi JSON Schema rõ ràng bằng `response_format: json_schema`, gồm status, answer và source_ids thuộc context. Nếu provider báo rõ không hỗ trợ schema, thử lại bằng `json_object`. Phản hồi sai JSON/schema/citation được yêu cầu tạo lại tối đa một lần, trong cùng timeout chung; tối đa ba HTTP calls nếu cần cả thương lượng định dạng lẫn sửa phản hồi (tối đa hai phản hồi model thành công). Đây là request bổ sung có thể tốn token. Không retry vì key sai, quota, timeout, model refusal hoặc output bị cắt. Không tự đổi sang demo khi API lỗi. Xem [chi tiết sửa tương thích Gemini](docs/fix-gemini-response-schema.md).
+
+**Lỗi thường gặp khi chạy và điền API.**
+
+| Hiện tượng | Cách xử lý |
+|---|---|
+| Vẫn thấy “Trích đoạn liên quan” | Cấu hình generation còn ở extractive; chọn API và bấm Áp dụng, hoặc kiểm tra biến môi trường rồi restart backend |
+| Reload trang mất key/model | Đúng với cấu hình riêng từng tab; nhập lại và Áp dụng, hoặc dùng cấu hình backend ở Cách 2 |
+| API key không hợp lệ / MODEL_AUTH_FAILED | Kiểm tra đúng key của provider, quyền truy cập model và quota của tài khoản |
+| Không tìm thấy model hoặc endpoint | Kiểm tra đúng Base URL, không lặp `/chat/completions`, nhập đúng model ID khả dụng |
+| Không tải được danh sách model | Provider có thể không hỗ trợ route list; thử model ID thủ công từ tài khoản của bạn |
+| LLM_BAD_RESPONSE | Cập nhật code và restart backend; bản mới có schema/repair. Nếu vẫn lỗi, giữ mã lỗi/request ID để chẩn đoán; không đưa key vào báo lỗi |
+| INDEX_NOT_READY / Đang chờ dữ liệu | Upload tài liệu và đợi Sẵn sàng; kiểm tra lỗi ingestion nếu xử lý thất bại |
+| Cổng 8000 đã được dùng | Dừng backend cũ trong terminal bằng Ctrl+C trước khi chạy bản mới |
 
 **Index bất biến và vòng đời tài liệu đã có đường chạy.**
 
@@ -126,4 +202,4 @@ GitHub Actions chạy tests/lint, kiểm tra OpenAPI không lệch code và buil
 | Upload/chat/source viewer | frontend/src | C |
 | Metrics, benchmark, fixtures | evaluation | B; cả nhóm kiểm tra gold |
 
-Các module đã có implementation và kiểm thử cơ bản. Việc còn cần dữ liệu/môi trường thật: chạy DOCX qua LibreOffice, build Compose, chạy model neural/LLM provider, kiểm tra hình ảnh giao diện trên trình duyệt, tạo gold có review và đánh giá chất lượng. Không có remote GitHub được tạo tự động; code, CI và hướng dẫn nhánh đã sẵn để đưa vào repository của nhóm.
+Các module đã có implementation và kiểm thử cơ bản. Việc còn cần dữ liệu/môi trường thật: chạy DOCX qua LibreOffice, build Compose, chạy model neural/LLM provider, kiểm tra hình ảnh giao diện trên trình duyệt, tạo gold có review và đánh giá chất lượng. Repository của nhóm: [xson214/vietnamese-rag](https://github.com/xson214/vietnamese-rag).
