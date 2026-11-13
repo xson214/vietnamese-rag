@@ -1,0 +1,2127 @@
+openapi: 3.1.0
+info:
+  title: Vietnamese RAG
+  description: Local document Q&A. Demo backends are explicitly labelled in health
+    and retrieval trace.
+  version: 0.1.0
+paths:
+  /api/v1/documents:
+    post:
+      tags:
+      - documents
+      summary: Upload
+      operationId: upload_api_v1_documents_post
+      parameters:
+      - name: idempotency-key
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Idempotency-Key
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Request
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '410':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gone
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Request Entity Too Large
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unsupported Media Type
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Too Many Requests
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Internal Server Error
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Gateway
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '504':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gateway Timeout
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+          description: OK
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              additionalProperties: false
+              properties:
+                file:
+                  type: string
+                  format: binary
+    get:
+      tags:
+      - documents
+      summary: Documents
+      operationId: documents_api_v1_documents_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - queued
+            - processing
+            - ready
+            - failed
+            - deleting
+            - delete_failed
+            type: string
+          - type: 'null'
+          title: Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentListResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Request
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '410':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gone
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Request Entity Too Large
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unsupported Media Type
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Too Many Requests
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Internal Server Error
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Gateway
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '504':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gateway Timeout
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+  /api/v1/documents/{id}:
+    get:
+      tags:
+      - documents
+      summary: Detail
+      operationId: detail_api_v1_documents__id__get
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Request
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '410':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gone
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Request Entity Too Large
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unsupported Media Type
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Too Many Requests
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Internal Server Error
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Gateway
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '504':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gateway Timeout
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+    delete:
+      tags:
+      - documents
+      summary: Delete
+      operationId: delete_api_v1_documents__id__delete
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Request
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '410':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gone
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Request Entity Too Large
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unsupported Media Type
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Too Many Requests
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Internal Server Error
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Gateway
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '504':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gateway Timeout
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '204':
+          description: Đã xóa nội dung khỏi mọi store.
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+  /api/v1/documents/{id}/status:
+    get:
+      tags:
+      - documents
+      summary: Status
+      operationId: status_api_v1_documents__id__status_get
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Request
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '410':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gone
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Request Entity Too Large
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unsupported Media Type
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Too Many Requests
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Internal Server Error
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Gateway
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '504':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gateway Timeout
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+  /api/v1/documents/{id}/retry:
+    post:
+      tags:
+      - documents
+      summary: Retry
+      operationId: retry_api_v1_documents__id__retry_post
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: idempotency-key
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Idempotency-Key
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Request
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '410':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gone
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Request Entity Too Large
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unsupported Media Type
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Too Many Requests
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Internal Server Error
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Gateway
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '504':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gateway Timeout
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+          description: OK
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+  /api/v1/documents/{id}/source:
+    get:
+      tags:
+      - documents
+      summary: Source
+      operationId: source_api_v1_documents__id__source_get
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Id
+      - name: document_version
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+          title: Document Version
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/pdf: {}
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Request
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '410':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gone
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '413':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Request Entity Too Large
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '415':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unsupported Media Type
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Too Many Requests
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Internal Server Error
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Bad Gateway
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '504':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Gateway Timeout
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+  /api/v1/search:
+    post:
+      tags:
+      - retrieval
+      summary: Search
+      operationId: search_api_v1_search_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '410':
+          description: Gone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '413':
+          description: Request Entity Too Large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '502':
+          description: Bad Gateway
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '504':
+          description: Gateway Timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+  /api/v1/chat:
+    post:
+      tags:
+      - chat
+      summary: Chat
+      operationId: chat_api_v1_chat_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '410':
+          description: Gone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '413':
+          description: Request Entity Too Large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '429':
+          description: Too Many Requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '502':
+          description: Bad Gateway
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '504':
+          description: Gateway Timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+  /api/v1/health:
+    get:
+      tags:
+      - system
+      summary: Health
+      operationId: health_api_v1_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+          headers:
+            X-Request-ID:
+              description: Server-generated request ID
+              schema:
+                type: string
+components:
+  schemas:
+    ChatRequest:
+      properties:
+        document_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          minItems: 1
+          uniqueItems: true
+          title: Document Ids
+        index_version:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Index Version
+        retrieval_config:
+          $ref: '#/components/schemas/RetrievalConfig'
+        question:
+          type: string
+          maxLength: 4000
+          minLength: 1
+          title: Question
+      additionalProperties: false
+      type: object
+      required:
+      - question
+      title: ChatRequest
+    ChatResponse:
+      allOf:
+      - if:
+          properties:
+            status:
+              const: answered
+        then:
+          properties:
+            citations:
+              minItems: 1
+        else:
+          properties:
+            citations:
+              maxItems: 0
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        status:
+          type: string
+          enum:
+          - answered
+          - insufficient_evidence
+          title: Status
+        answer:
+          type: string
+          title: Answer
+        citations:
+          items:
+            $ref: '#/components/schemas/Citation'
+          type: array
+          title: Citations
+        confidence:
+          type: 'null'
+          title: Confidence
+        retrieval_trace:
+          $ref: '#/components/schemas/RetrievalTrace'
+      type: object
+      required:
+      - request_id
+      - status
+      - answer
+      - citations
+      - retrieval_trace
+      title: ChatResponse
+    Citation:
+      properties:
+        source_id:
+          type: string
+          title: Source Id
+        document_id:
+          type: string
+          title: Document Id
+        document_version:
+          type: integer
+          title: Document Version
+        filename:
+          type: string
+          title: Filename
+        page_number:
+          type: integer
+          title: Page Number
+        quote:
+          type: string
+          title: Quote
+        source_span:
+          $ref: '#/components/schemas/CitationOffset'
+        source_url:
+          type: string
+          title: Source Url
+      type: object
+      required:
+      - source_id
+      - document_id
+      - document_version
+      - filename
+      - page_number
+      - quote
+      - source_span
+      - source_url
+      title: Citation
+    CitationOffset:
+      properties:
+        start_offset:
+          type: integer
+          title: Start Offset
+        end_offset:
+          type: integer
+          title: End Offset
+      type: object
+      required:
+      - start_offset
+      - end_offset
+      title: CitationOffset
+    DeleteResponse:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        document_id:
+          type: string
+          title: Document Id
+        status:
+          type: string
+          const: deleting
+          title: Status
+        job_id:
+          type: string
+          title: Job Id
+      type: object
+      required:
+      - request_id
+      - document_id
+      - status
+      - job_id
+      title: DeleteResponse
+    Document:
+      properties:
+        document_id:
+          type: string
+          title: Document Id
+        document_version:
+          type: integer
+          title: Document Version
+        filename:
+          type: string
+          title: Filename
+        mime_type:
+          type: string
+          title: Mime Type
+        size_bytes:
+          type: integer
+          title: Size Bytes
+        status:
+          type: string
+          enum:
+          - queued
+          - processing
+          - ready
+          - failed
+          - deleting
+          - delete_failed
+          title: Status
+        page_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Page Count
+        job_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Job Id
+        available_index_versions:
+          items:
+            type: string
+          type: array
+          title: Available Index Versions
+        source_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Url
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/ErrorInfo'
+          - type: 'null'
+        created_at:
+          type: string
+          title: Created At
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - document_id
+      - document_version
+      - filename
+      - mime_type
+      - size_bytes
+      - status
+      - page_count
+      - job_id
+      - available_index_versions
+      - source_url
+      - error
+      - created_at
+      - updated_at
+      title: Document
+    DocumentListResponse:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        items:
+          items:
+            $ref: '#/components/schemas/Document'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+      type: object
+      required:
+      - request_id
+      - items
+      - next_cursor
+      title: DocumentListResponse
+    DocumentResponse:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        document:
+          $ref: '#/components/schemas/Document'
+      type: object
+      required:
+      - request_id
+      - document
+      title: DocumentResponse
+    ErrorDetail:
+      properties:
+        field:
+          type: string
+          title: Field
+        reason:
+          type: string
+          title: Reason
+      type: object
+      required:
+      - field
+      - reason
+      title: ErrorDetail
+    ErrorInfo:
+      properties:
+        code:
+          type: string
+          title: Code
+        message:
+          type: string
+          title: Message
+        retryable:
+          type: boolean
+          title: Retryable
+        details:
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+          type: array
+          title: Details
+          default: []
+      type: object
+      required:
+      - code
+      - message
+      - retryable
+      title: ErrorInfo
+    ErrorResponse:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        status:
+          type: string
+          const: error
+          title: Status
+          default: error
+        error:
+          $ref: '#/components/schemas/ErrorInfo'
+      type: object
+      required:
+      - request_id
+      - error
+      title: ErrorResponse
+    HealthResponse:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        status:
+          type: string
+          enum:
+          - ok
+          - degraded
+          - unavailable
+          title: Status
+        checked_at:
+          type: string
+          title: Checked At
+        active_index_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Active Index Version
+        components:
+          additionalProperties:
+            type: string
+          type: object
+          title: Components
+        modes:
+          additionalProperties:
+            type: string
+          type: object
+          title: Modes
+      type: object
+      required:
+      - request_id
+      - status
+      - checked_at
+      - active_index_version
+      - components
+      - modes
+      title: HealthResponse
+    RetrievalConfig:
+      not:
+        properties:
+          dense:
+            const: false
+          bm25:
+            const: false
+        required:
+        - dense
+        - bm25
+      properties:
+        dense:
+          type: boolean
+          title: Dense
+          default: true
+        bm25:
+          type: boolean
+          title: Bm25
+          default: true
+        reranking:
+          type: boolean
+          title: Reranking
+          default: true
+        top_k:
+          type: integer
+          maximum: 20.0
+          minimum: 1.0
+          title: Top K
+          default: 5
+      additionalProperties: false
+      type: object
+      title: RetrievalConfig
+    RetrievalTrace:
+      properties:
+        resolved_index_version:
+          type: string
+          title: Resolved Index Version
+        corpus_snapshot_id:
+          type: string
+          title: Corpus Snapshot Id
+        embedding_model_version:
+          type: string
+          title: Embedding Model Version
+        chunking_config_id:
+          type: string
+          title: Chunking Config Id
+        effective_config:
+          $ref: '#/components/schemas/RetrievalConfig'
+        candidate_count:
+          type: integer
+          title: Candidate Count
+        reranked_count:
+          type: integer
+          title: Reranked Count
+        returned_count:
+          type: integer
+          title: Returned Count
+        context_chunk_count:
+          type: integer
+          title: Context Chunk Count
+      additionalProperties: true
+      type: object
+      required:
+      - resolved_index_version
+      - corpus_snapshot_id
+      - embedding_model_version
+      - chunking_config_id
+      - effective_config
+      - candidate_count
+      - reranked_count
+      - returned_count
+      - context_chunk_count
+      title: RetrievalTrace
+    Scores:
+      properties:
+        dense:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Dense
+        bm25:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Bm25
+        fusion:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Fusion
+        rerank:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Rerank
+      type: object
+      title: Scores
+    SearchHit:
+      properties:
+        chunk_id:
+          type: string
+          title: Chunk Id
+        document_id:
+          type: string
+          title: Document Id
+        document_version:
+          type: integer
+          title: Document Version
+        filename:
+          type: string
+          title: Filename
+        text:
+          type: string
+          title: Text
+        source_spans:
+          items:
+            $ref: '#/components/schemas/SourceSpan'
+          type: array
+          title: Source Spans
+        rank:
+          type: integer
+          title: Rank
+        scores:
+          $ref: '#/components/schemas/Scores'
+      type: object
+      required:
+      - chunk_id
+      - document_id
+      - document_version
+      - filename
+      - text
+      - source_spans
+      - rank
+      - scores
+      title: SearchHit
+    SearchRequest:
+      properties:
+        document_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          minItems: 1
+          uniqueItems: true
+          title: Document Ids
+        index_version:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Index Version
+        retrieval_config:
+          $ref: '#/components/schemas/RetrievalConfig'
+        query:
+          type: string
+          maxLength: 4000
+          minLength: 1
+          title: Query
+      additionalProperties: false
+      type: object
+      required:
+      - query
+      title: SearchRequest
+    SearchResponse:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        hits:
+          items:
+            $ref: '#/components/schemas/SearchHit'
+          type: array
+          title: Hits
+        retrieval_trace:
+          $ref: '#/components/schemas/RetrievalTrace'
+      type: object
+      required:
+      - request_id
+      - hits
+      - retrieval_trace
+      title: SearchResponse
+    SourceSpan:
+      properties:
+        page_number:
+          type: integer
+          minimum: 1.0
+          title: Page Number
+        start_offset:
+          type: integer
+          minimum: 0.0
+          title: Start Offset
+        end_offset:
+          type: integer
+          minimum: 1.0
+          title: End Offset
+        quote:
+          type: string
+          title: Quote
+      type: object
+      required:
+      - page_number
+      - start_offset
+      - end_offset
+      - quote
+      title: SourceSpan
+    StatusResponse:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        document_id:
+          type: string
+          title: Document Id
+        document_version:
+          type: integer
+          title: Document Version
+        status:
+          type: string
+          title: Status
+        stage:
+          type: string
+          title: Stage
+        progress:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Progress
+        job_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Job Id
+        attempt:
+          type: integer
+          title: Attempt
+        available_index_versions:
+          items:
+            type: string
+          type: array
+          title: Available Index Versions
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/ErrorInfo'
+          - type: 'null'
+        updated_at:
+          type: string
+          title: Updated At
+      type: object
+      required:
+      - request_id
+      - document_id
+      - document_version
+      - status
+      - stage
+      - progress
+      - job_id
+      - attempt
+      - available_index_versions
+      - error
+      - updated_at
+      title: StatusResponse

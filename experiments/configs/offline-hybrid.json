@@ -1,0 +1,9 @@
+{
+  "description": "Offline demo baseline; hash vectors and lexical rerank are not semantic/neural model results.",
+  "embedding_backend": "hash",
+  "reranker_backend": "lexical",
+  "chunking_strategy": "recursive",
+  "chunk_size": 350,
+  "chunk_overlap": 60,
+  "retrieval_config": {"dense": true, "bm25": true, "reranking": true, "top_k": 10}
+}

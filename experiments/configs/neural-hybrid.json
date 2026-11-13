@@ -1,0 +1,13 @@
+{
+  "description": "Neural experiment candidate; record the resolved immutable model commit in the generated index manifest.",
+  "embedding_backend": "sentence_transformers",
+  "embedding_model": "intfloat/multilingual-e5-small",
+  "embedding_revision": "main",
+  "reranker_backend": "cross_encoder",
+  "reranker_model": "BAAI/bge-reranker-v2-m3",
+  "reranker_revision": "main",
+  "chunking_strategy": "recursive",
+  "chunk_size": 120,
+  "chunk_overlap": 20,
+  "retrieval_config": {"dense": true, "bm25": true, "reranking": true, "top_k": 10}
+}

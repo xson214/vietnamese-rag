@@ -1,0 +1,47 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.16.0
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        INSTALL_NEURAL: ${INSTALL_NEURAL:-false}
+    environment:
+      DATA_DIR: /data
+      QDRANT_URL: http://qdrant:6333
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-hash}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
+      EMBEDDING_REVISION: ${EMBEDDING_REVISION:-main}
+      RERANKER_BACKEND: ${RERANKER_BACKEND:-lexical}
+      RERANKER_MODEL: ${RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
+      RERANKER_REVISION: ${RERANKER_REVISION:-main}
+      GENERATION_BACKEND: ${GENERATION_BACKEND:-extractive}
+      CHUNKING_STRATEGY: ${CHUNKING_STRATEGY:-recursive}
+      CHUNK_SIZE: ${CHUNK_SIZE:-120}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-20}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-60}
+      HF_HOME: /data/models
+    volumes:
+      - app-data:/data
+    ports:
+      - '127.0.0.1:8000:8000'
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+  frontend:
+    build: ./frontend
+    ports:
+      - '127.0.0.1:8080:80'
+    depends_on:
+      - backend
+    restart: unless-stopped
+volumes:
+  app-data:
+  qdrant-data:

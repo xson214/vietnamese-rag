@@ -1,0 +1,35 @@
+{
+  "dataset_version": "demo-fixture-v1",
+  "fixture_only": true,
+  "description": "Two illustrative questions for wiring checks. Not the 180-question research gold dataset. Upload a PDF whose canonical page text starts with demo_corpus.txt, then bind IDs using --document-map and verify offsets.",
+  "questions": [
+    {
+      "question_id": "demo-001",
+      "question_family_id": "demo-registration",
+      "question": "Thời gian xử lý hồ sơ đăng ký là bao lâu?",
+      "document_ids": ["demo-document"],
+      "answerable": true,
+      "question_type": "single_evidence",
+      "reference_answer": "Hồ sơ đăng ký được xử lý trong 5 ngày làm việc.",
+      "required_claims": ["Thời gian xử lý là 5 ngày làm việc"],
+      "evidence_sets": [
+        {"set_id": "a", "spans": [
+          {"document_id": "demo-document", "document_version": 1, "page_number": 1, "start_offset": 0, "end_offset": 47, "quote": "Hồ sơ đăng ký được xử lý trong 5 ngày làm việc."}
+        ]}
+      ],
+      "unanswerable_reason": null
+    },
+    {
+      "question_id": "demo-002",
+      "question_family_id": "demo-astronomy",
+      "question": "Sao Hỏa có núi lửa nào?",
+      "document_ids": ["demo-document"],
+      "answerable": false,
+      "question_type": "unanswerable",
+      "reference_answer": null,
+      "required_claims": [],
+      "evidence_sets": [],
+      "unanswerable_reason": "The fixture document only describes registration processing."
+    }
+  ]
+}
